@@ -1,0 +1,85 @@
+# This is a basic workflow to help you get started with Actions
+name: Gatsby
+
+on:
+  pull_request:
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        cms_api: ['preview']
+        gatsby_locale: ['en-GB', 'en-US']
+    steps:
+      - uses: actions/checkout@v2
+      - name: Use Node.js
+        uses: actions/setup-node@v1
+        with:
+          node-version: '18.x'
+      - name: Set dev variables for branch develop
+        if: |
+          (github.event_name == 'pull_request' && github.event.pull_request.base.ref == 'develop') ||
+          (github.event_name == 'push' && endsWith(github.ref, '/develop'))
+        run: |
+          echo "::set-output name=target_push::true"
+          echo "CONTENTFUL_ENVIRONMENT=master" >> $GITHUB_ENV
+      - name: Set stg variables for branch staging
+        if: |
+          (github.event_name == 'pull_request' && github.event.pull_request.base.ref == 'staging') ||
+          (github.event_name == 'push' && endsWith(github.ref, '/staging'))
+        run: |
+          echo "::set-output name=target_push::true"
+          echo "CONTENTFUL_ENVIRONMENT=master" >> $GITHUB_ENV
+      - name: Set prod variables for branch master
+        if: |
+          (github.event_name == 'pull_request' && github.event.pull_request.base.ref == 'master') ||
+          (github.event_name == 'push' && endsWith(github.ref, '/master'))
+        run: |
+          echo "::set-output name=target_push::true"
+          echo "CONTENTFUL_ENVIRONMENT=master" >> $GITHUB_ENV
+      - name: Caching Gatsby
+        id: gatsby-cache-build
+        uses: actions/cache@v2
+        with:
+          path: |
+            public
+            .cache
+          key: ${{ runner.os }}-${{ matrix.cms_api }}-gatsby-build-${{ github.run_id }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.cms_api }}-gatsby-build-
+      - name: Setting CMS API (delivery)
+        if: matrix.cms_api == 'delivery'
+        run: |
+          echo "CONTENTFUL_ACCESS_TOKEN=${{ secrets.CONTENTFUL_DELIVERY_API_ACCESS_TOKEN }}" >> $GITHUB_ENV
+      - name: Setting CMS API (preview)
+        if: matrix.cms_api == 'preview'
+        run: |
+          echo "CONTENTFUL_ACCESS_TOKEN=${{ secrets.CONTENTFUL_PREVIEW_API_ACCESS_TOKEN }}" >> $GITHUB_ENV
+          echo "GATSBY_CONTENTFUL_HOST=preview.contentful.com" >> $GITHUB_ENV
+      - name: Installing dependencies
+        run: yarn install --prod
+      - name: Building Gatsby site
+        run: yarn build --log-pages
+        env:
+          GATSBY_CONTENTFUL_SPACE_ID: ${{ secrets.CONTENTFUL_SPACE_ID }}
+          GATSBY_CONTENTFUL_READ_ONLY_ACCESS_TOKEN: ${{ secrets.GATSBY_CONTENTFUL_READ_ONLY_ACCESS_TOKEN }}
+          GATSBY_DEPLOYMENT_ENV: dev
+          GATSBY_FRIENDBUY_INTEGRATION_CODE: site-59f8e2e5-thewildest.com
+          GATSBY_FRIENDBUY_WIDGET_CODE: eJL-tLt
+          GATSBY_GITHUB_COMMIT_HASH: ${{ github.sha }}
+          GATSBY_KINTOPIA_API_BASE_PATH: https://kintopia-api.stg.kinship.tv
+          GATSBY_NUTRITION_BASE_URL: https://nutrition-widget-production.whistle.com/api
+          GATSBY_OKTA_CLIENT_ID: 0oa19ujkpbBan6JLp1d7
+          GATSBY_OKTA_DOMAIN: onekinship.oktapreview.com
+          GATSBY_RECAPTCHA_SITE_KEY: placeholder
+          GATSBY_STRIPE_PUBLISHABLE_KEY: placeholder
+          GATSBY_VETINSIGHT_URLS: placeholder
+          GATSBY_WILDEST_PACK_PRICE_ID: placeholder
+          GATSBY_AAP_API_KEY: placeholder
+          WILDEST_ENV: dev
+          GATSBY_LOCALE: ${{ matrix.gatsby_locale }}
+      - name: Listing all files for debugging
+        run: ls -l
